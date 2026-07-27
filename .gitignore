@@ -1,3 +1,7 @@
 .idea/
 .junie/
+.venv/
 .env
+wheels/
+temp/*
+!temp/.gitkeep

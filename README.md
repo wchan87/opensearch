@@ -1,5 +1,7 @@
 # OpenSearch
 
+## OpenSearch Docker Compose
+
 The instructions below are for setting up a Docker Compose cluster defined by [compose.yaml](/compose.yaml), which is based on [docker-compose-3.x.yml](https://github.com/opensearch-project/opensearch-build/blob/main/docker/release/dockercomposefiles/docker-compose-3.x.yml) which in turn uses the Docker images,  [opensearchproject/opensearch:3](https://hub.docker.com/r/opensearchproject/opensearch/tags?name=3) and [opensearchproject/opensearch-dashboards:3](https://hub.docker.com/r/opensearchproject/opensearch-dashboards/tags?name=3).
 1. Set the password for `admin` account 
    ```bash
@@ -37,3 +39,80 @@ The instructions below are for setting up a Docker Compose cluster defined by [c
        curl -X POST "https://localhost:9200/_plugins/_performanceanalyzer/rca/cluster/config" -H 'Content-Type: application/json' -d '{"enabled": false}' -ku admin:$OPENSEARCH_INITIAL_ADMIN_PASSWORD
        curl -X POST "https://localhost:9200/_plugins/_performanceanalyzer/cluster/config" -H 'Content-Type: application/json' -d '{"enabled": false}' -ku admin:$OPENSEARCH_INITIAL_ADMIN_PASSWORD
        ```
+
+## Python Virtual Environment
+
+1. Set up the virtual environment
+   ```bash
+   python -m venv .venv
+   ```
+2. Activate the virtual environment
+   ```bash
+   source .venv/Scripts/activate
+   ```
+3. Install dependencies
+   ```bash
+   pip install -vr requirements-dev.txt
+   ```
+
+## Stock Market Ingestion into OpenSearch
+
+1. After setting up [Python virtual environment](#python-virtual-environment), run [src/yfinance_extract.py](/src/yfinance_extract.py) which is based on this [script](https://github.com/marsierz-ui/SPCX_data/blob/claude/dreamy-archimedes-2igl9i/collect.py) and uses the [yfinance](https://ranaroussi.github.io/yfinance/) library
+   ```bash
+   python src/yfinance_extract.py -t SPCX
+   python src/yfinance_extract.py -t TSLA
+   ```
+2. [Create the index](https://docs.opensearch.org/latest/api-reference/index-apis/create-index/), `settings.index.number_of_replicas` needs to be explicitly set to `0` or the index health will be `Yellow` so it will never be accessible
+   ```bash
+   curl -X PUT "https://localhost:9200/ticker_history" -H 'Content-Type: application/json' -d '{"settings":{"index":{"number_of_shards":1,"number_of_replicas":0}}}' -ku admin:$OPENSEARCH_INITIAL_ADMIN_PASSWORD
+   ```
+   * [Delete the index](https://docs.opensearch.org/latest/api-reference/index-apis/delete-index/) if necessary
+      ```bash
+      curl -X DELETE "https://localhost:9200/ticker_history" -H 'Content-Type: application/json' -ku admin:$OPENSEARCH_INITIAL_ADMIN_PASSWORD
+      ```
+   * [Delete the documents](https://docs.opensearch.org/latest/api-reference/document-apis/delete-by-query/) in the index if needed
+      ```bash
+      curl -X POST "https://localhost:9200/ticker_history/_delete_by_query" -H 'Content-Type: application/json' -d '{"query":{"match_all":{}}}' -ku admin:$OPENSEARCH_INITIAL_ADMIN_PASSWORD
+      ```
+3. Run the PySpark job through the [spark](https://hub.docker.com/_/spark) image to read the extracts and write to OpenSearch via [src/opensearch_load.py](/src/opensearch_load.py)
+   ```bash
+   docker run -it --rm -v $(pwd):/opt/spark/work-dir --name spark \
+      -e OPENSEARCH_INITIAL_ADMIN_PASSWORD=$OPENSEARCH_INITIAL_ADMIN_PASSWORD \
+      spark:4.1.2-scala2.13-java21-python3-ubuntu \
+      /opt/spark/bin/spark-submit --packages org.opensearch.client:opensearch-spark-40_2.13:2.0.0 --conf spark.jars.ivy=/opt/spark/jars /opt/spark/work-dir/src/opensearch_load.py
+   ```
+   * `--conf spark.jars.ivy=/opt/spark/jars` is needed to work with `--packages org.opensearch.client:opensearch-spark-40_2.13:2.0.0` (see [here](https://docs.opensearch.org/latest/clients/hadoop/)) or the following error happens
+      ```
+      Exception in thread "main" java.io.FileNotFoundException: /nonexistent/.ivy2.5.2/cache/resolved-org.apache.spark-spark-submit-parent-a95084db-7e12-40b2-b7f1-1e9394f2a70d-1.0.xml (No such file or directory)
+      ```
+
+
+## Spark Packaging Options
+
+There was an attempt to incorporate `yfinance` into the PySpark job, but I couldn't work out the steps needed to package the libraries as per [Python Package Management](https://spark.apache.org/docs/latest/api/python/tutorial/python_packaging.html).
+
+The instructions below are an attempt to use the [PySpark native features](https://spark.apache.org/docs/latest/api/python/tutorial/python_packaging.html#using-pyspark-native-features) that was attempted is as follows:
+1. Download the [wheels](https://packaging.python.org/en/latest/specifications/binary-distribution-format/) associated with `yfinance` that would be compatible with PySpark
+   ```bash
+   pip download yfinance==1.5.2 \
+      --platform manylinux2014_x86_64 \
+      --python-version 313 \
+      --only-binary=:all: \
+      --dest ./wheels 
+   ```
+2. Add the wheels to `--py-files` argument so that it's picked up
+   ```bash
+   docker run -it --rm -v $(pwd):/opt/spark/work-dir --name spark \
+      spark:4.1.2-scala2.13-java21-python3-ubuntu \
+      /opt/spark/bin/spark-submit --py-files /opt/spark/work-dir/wheels/* /opt/spark/work-dir/src/opensearch_load.py
+   ```
+   * The dependency resolution didn't work as the code fails on trying to `import numpy` due to `import pandas` that `yfinance` uses internally.
+
+Some debugging techniques that could be useful for future attempts are
+* Start PySpark shell so the container remains active and use `docker exec` or `Exec` tab on Docker Desktop to check what's available to the container
+   ```bash
+   docker run -it --rm -v $(pwd):/opt/spark/work-dir --name spark \
+      spark:4.1.2-scala2.13-java21-python3-ubuntu \
+      /opt/spark/bin/pyspark
+   ```
+* Add `--conf spark.log.level=DEBUG` as `spark-submit` argument to propagate the [configuration parameter](https://spark.apache.org/docs/latest/configuration.html) to the PySpark application
