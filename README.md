@@ -107,6 +107,17 @@ The instructions below are an attempt to use the [PySpark native features](https
       /opt/spark/bin/spark-submit --py-files /opt/spark/work-dir/wheels/* /opt/spark/work-dir/src/opensearch_load.py
    ```
    * The dependency resolution didn't work as the code fails on trying to `import numpy` due to `import pandas` that `yfinance` uses internally.
+   * The dependency resolution failure seems to be due to wheels not being supported as per the documentation
+     > PySpark allows to upload Python files (`.py`), zipped Python packages (`.zip`), and Egg files (`.egg`) to the executors by one of the following:
+     > 
+     > ...
+     > 
+     > However, it does not allow to add packages built as [Wheels](https://www.python.org/dev/peps/pep-0427/) and therefore does not allow to include dependencies with native code.
+   * **Note:** `pip install` requires `--target` because `HOME=/nonexistent` so the command will fail on the default pip cache location, `~/.cache/pip`
+     ```bash
+     python3 -m pip install yfinance==1.5.2 --target /opt/spark/python/lib/
+     ```
+     * `--only-binary=:all:` was considered an option to ensure the wheel is saved to the target location, but it doesn't seem to be applied
 
 Some debugging techniques that could be useful for future attempts are
 * Start PySpark shell so the container remains active and use `docker exec` or `Exec` tab on Docker Desktop to check what's available to the container
@@ -116,3 +127,17 @@ Some debugging techniques that could be useful for future attempts are
       /opt/spark/bin/pyspark
    ```
 * Add `--conf spark.log.level=DEBUG` as `spark-submit` argument to propagate the [configuration parameter](https://spark.apache.org/docs/latest/configuration.html) to the PySpark application
+
+The AWS Glue equivalent of what we're trying is documented in [Using Python libraries with AWS Glue](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-programming-python-libraries.html) with the following options
+* "Installing additional Python libraries in AWS Glue 5.0 or above using Zip of Wheels"
+  > --additional-python-modules s3://amzn-s3-demo-bucket/path/to/zip-of-wheels-1.0.0.gluewheels.zip --python-modules-installer-option --no-index
+  * See [Appendix A: Creating a Zip of Wheels Artifact](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-programming-python-libraries.html#glue-python-library-zip-of-wheels-appendix) for how to assemble a zip of wheel artifact
+* "Installing additional Python libraries using Wheel"
+  > --additional-python-modules s3://amzn-s3-demo-bucket/path/to/package-1.0.0-py3-none-any.whl,s3://your-bucket/path/to/another-package-2.1.0-cp311-cp311-linux_x86_64.whl
+* "Installing additional Python libraries in AWS Glue 5.0 or above using requirements.txt"
+  > --additional-python-modules s3://path_to_requirements.txt  --python-modules-installer-option -r
+* "Installing additional Python libraries directly configuring as comma separated list"
+  > --additional-python-modules scikit-learn==0.21.3,ephem==4.1.6
+* "Including Python files with PySpark native features"
+  > AWS Glue uses PySpark to include Python files in AWS Glue ETL jobs. You will want to use `--additional-python-modules` to manage your dependencies when available. You can use the `--extra-py-files` job parameter to include Python files. Dependencies must be hosted in Amazon S3 and the argument value should be a comma delimited list of Amazon S3 paths with no spaces. This functionality behaves like the Python dependency management you would use with Spark. For more information on Python dependency management in Spark, see Using [PySpark Native Features](https://spark.apache.org/docs/latest/api/python/tutorial/python_packaging.html#using-pyspark-native-features) page in Apache Spark documentation. `--extra-py-files` is useful in cases where your additional code is not packaged, or when you are migrating a Spark program with an existing toolchain for managing dependencies. For your dependency tooling to be maintainable, you will have to bundle your dependencies before submitting.
+   * In short, `--extra-py-files` for AWS Glue corresponds to `--py-files` with vanilla Apache Spark
