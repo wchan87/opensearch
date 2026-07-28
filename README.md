@@ -76,7 +76,8 @@ The instructions below are for setting up a Docker Compose cluster defined by [c
       ```
 3. Run the PySpark job through the [spark](https://hub.docker.com/_/spark) image to read the extracts and write to OpenSearch via [src/opensearch_load.py](/src/opensearch_load.py)
    ```bash
-   docker run -it --rm -v $(pwd):/opt/spark/work-dir --name spark \
+   docker run -it --rm --name spark \
+      -v $(pwd):/opt/spark/work-dir \
       -e OPENSEARCH_INITIAL_ADMIN_PASSWORD=$OPENSEARCH_INITIAL_ADMIN_PASSWORD \
       spark:4.1.2-scala2.13-java21-python3-ubuntu \
       /opt/spark/bin/spark-submit --packages org.opensearch.client:opensearch-spark-40_2.13:2.0.0 --conf spark.jars.ivy=/opt/spark/jars /opt/spark/work-dir/src/opensearch_load.py
@@ -86,6 +87,29 @@ The instructions below are for setting up a Docker Compose cluster defined by [c
       Exception in thread "main" java.io.FileNotFoundException: /nonexistent/.ivy2.5.2/cache/resolved-org.apache.spark-spark-submit-parent-a95084db-7e12-40b2-b7f1-1e9394f2a70d-1.0.xml (No such file or directory)
       ```
 
+The following command uses the [amazon/aws-glue-libs](https://hub.docker.com/r/amazon/aws-glue-libs) image which can install Python modules. The Docker image doesn't support the `--additional-python-modules` argument so `python3 -m pip install` is used instead.
+```bash
+docker run -it --rm --name glue5_spark_submit \
+    -v $(pwd):/opt/hadoop/workspace \
+    -e OPENSEARCH_INITIAL_ADMIN_PASSWORD=$OPENSEARCH_INITIAL_ADMIN_PASSWORD \
+    amazon/aws-glue-libs:5.0.9 \
+    -c "python3 -m pip install \"yfinance==1.5.2\" && spark-submit --packages org.opensearch.client:opensearch-spark-40_2.13:2.0.0 /opt/hadoop/workspace/src/yfinance_to_opensearch.py"
+```
+* The command fails with the following error which needs to be troubleshot further.
+  ```
+  Traceback (most recent call last):
+    File "/opt/hadoop/workspace/src/yfinance_to_opensearch.py", line 37, in <module>
+      main()
+    File "/opt/hadoop/workspace/src/yfinance_to_opensearch.py", line 34, in main
+      .save("ticker_history", mode="append") # append is needed in addition to upsert
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/usr/lib/spark/python/lib/pyspark.zip/pyspark/sql/readwriter.py", line 1463, in save
+    File "/usr/lib/spark/python/lib/py4j-0.10.9.7-src.zip/py4j/java_gateway.py", line 1322, in __call__
+    File "/usr/lib/spark/python/lib/pyspark.zip/pyspark/errors/exceptions/captured.py", line 179, in deco
+    File "/usr/lib/spark/python/lib/py4j-0.10.9.7-src.zip/py4j/protocol.py", line 326, in get_return_value
+  py4j.protocol.Py4JJavaError: An error occurred while calling o263.save.
+  : java.util.ServiceConfigurationError: org.apache.spark.sql.sources.DataSourceRegister: org.opensearch.spark.sql.DefaultSource15 Unable to get public no-arg constructor
+  ```
 
 ## Spark Packaging Options
 
