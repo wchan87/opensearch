@@ -93,23 +93,8 @@ docker run -it --rm --name glue5_spark_submit \
     -v $(pwd):/opt/hadoop/workspace \
     -e OPENSEARCH_INITIAL_ADMIN_PASSWORD=$OPENSEARCH_INITIAL_ADMIN_PASSWORD \
     amazon/aws-glue-libs:5.0.9 \
-    -c "python3 -m pip install \"yfinance==1.5.2\" && spark-submit --packages org.opensearch.client:opensearch-spark-40_2.13:2.0.0 /opt/hadoop/workspace/src/yfinance_to_opensearch.py"
+    -c "python3 -m pip install \"yfinance==1.5.2\" && spark-submit --packages org.opensearch.client:opensearch-spark-35_2.12:2.0.0 /opt/hadoop/workspace/src/yfinance_to_opensearch.py"
 ```
-* The command fails with the following error which needs to be troubleshot further.
-  ```
-  Traceback (most recent call last):
-    File "/opt/hadoop/workspace/src/yfinance_to_opensearch.py", line 37, in <module>
-      main()
-    File "/opt/hadoop/workspace/src/yfinance_to_opensearch.py", line 34, in main
-      .save("ticker_history", mode="append") # append is needed in addition to upsert
-       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    File "/usr/lib/spark/python/lib/pyspark.zip/pyspark/sql/readwriter.py", line 1463, in save
-    File "/usr/lib/spark/python/lib/py4j-0.10.9.7-src.zip/py4j/java_gateway.py", line 1322, in __call__
-    File "/usr/lib/spark/python/lib/pyspark.zip/pyspark/errors/exceptions/captured.py", line 179, in deco
-    File "/usr/lib/spark/python/lib/py4j-0.10.9.7-src.zip/py4j/protocol.py", line 326, in get_return_value
-  py4j.protocol.Py4JJavaError: An error occurred while calling o263.save.
-  : java.util.ServiceConfigurationError: org.apache.spark.sql.sources.DataSourceRegister: org.opensearch.spark.sql.DefaultSource15 Unable to get public no-arg constructor
-  ```
 
 ## Spark Packaging Options
 
