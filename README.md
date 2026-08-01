@@ -1,6 +1,14 @@
 # OpenSearch
 
-## OpenSearch Docker Compose
+* [Local Setup](#local-setup) – Prerequisites for local development
+* [Ingestion into OpenSearch](#ingestion-into-opensearch) – Data ingestion into OpenSearch
+
+## Local Setup
+
+* [OpenSearch Docker Compose Cluster](#opensearch-docker-compose-cluster) – Local OpenSearch node and dashboards
+* [Python Virtual Environment](#python-virtual-environment) – Enable IDE to check method signatures and run certain scripts locally
+
+### OpenSearch Docker Compose Cluster
 
 The instructions below are for setting up a Docker Compose cluster defined by [compose.yaml](/compose.yaml), which is based on [docker-compose-3.x.yml](https://github.com/opensearch-project/opensearch-build/blob/main/docker/release/dockercomposefiles/docker-compose-3.x.yml) which in turn uses the Docker images,  [opensearchproject/opensearch:3](https://hub.docker.com/r/opensearchproject/opensearch/tags?name=3) and [opensearchproject/opensearch-dashboards:3](https://hub.docker.com/r/opensearchproject/opensearch-dashboards/tags?name=3).
 1. Set the password for `admin` account 
@@ -40,7 +48,7 @@ The instructions below are for setting up a Docker Compose cluster defined by [c
        curl -X POST "https://localhost:9200/_plugins/_performanceanalyzer/cluster/config" -H 'Content-Type: application/json' -d '{"enabled": false}' -ku admin:$OPENSEARCH_INITIAL_ADMIN_PASSWORD
        ```
 
-## Python Virtual Environment
+### Python Virtual Environment
 
 1. Set up the virtual environment
    ```bash
@@ -55,26 +63,41 @@ The instructions below are for setting up a Docker Compose cluster defined by [c
    pip install -vr requirements-dev.txt
    ```
 
-## Stock Market Ingestion into OpenSearch
+## Ingestion into OpenSearch
 
-1. After setting up [Python virtual environment](#python-virtual-environment), run [src/yfinance_extract.py](/src/yfinance_extract.py) which is based on this [script](https://github.com/marsierz-ui/SPCX_data/blob/claude/dreamy-archimedes-2igl9i/collect.py) and uses the [yfinance](https://ranaroussi.github.io/yfinance/) library
-   ```bash
-   python src/yfinance_extract.py -t SPCX
-   python src/yfinance_extract.py -t TSLA
-   ```
-2. [Create the index](https://docs.opensearch.org/latest/api-reference/index-apis/create-index/), `settings.index.number_of_replicas` needs to be explicitly set to `0` or the index health will be `Yellow` so it will never be accessible
+There are two variants for loading OpenSearch that do the same thing to leverage ticker data from Yahoo! Finance
+* [PySpark](#pyspark)
+  * [Apache Spark Python Packaging Options](#apache-spark-python-packaging-options)
+* [AWS Glue](#aws-glue)
+  * [AWS Glue Python Packaging Options](#aws-glue-python-packaging-options)
+
+The instructions below are to create/maintain the `ticker_history` index that will be used to hold the data to be loaded
+* [Create the index](https://docs.opensearch.org/latest/api-reference/index-apis/create-index/), `settings.index.number_of_replicas` needs to be explicitly set to `0` or the index health will be `Yellow` so it will never be accessible
    ```bash
    curl -X PUT "https://localhost:9200/ticker_history" -H 'Content-Type: application/json' -d '{"settings":{"index":{"number_of_shards":1,"number_of_replicas":0}}}' -ku admin:$OPENSEARCH_INITIAL_ADMIN_PASSWORD
    ```
-   * [Delete the index](https://docs.opensearch.org/latest/api-reference/index-apis/delete-index/) if necessary
-      ```bash
-      curl -X DELETE "https://localhost:9200/ticker_history" -H 'Content-Type: application/json' -ku admin:$OPENSEARCH_INITIAL_ADMIN_PASSWORD
-      ```
-   * [Delete the documents](https://docs.opensearch.org/latest/api-reference/document-apis/delete-by-query/) in the index if needed
-      ```bash
-      curl -X POST "https://localhost:9200/ticker_history/_delete_by_query" -H 'Content-Type: application/json' -d '{"query":{"match_all":{}}}' -ku admin:$OPENSEARCH_INITIAL_ADMIN_PASSWORD
-      ```
-3. Run the PySpark job through the [spark](https://hub.docker.com/_/spark) image to read the extracts and write to OpenSearch via [src/opensearch_load.py](/src/opensearch_load.py)
+* [Delete the index](https://docs.opensearch.org/latest/api-reference/index-apis/delete-index/) if necessary
+   ```bash
+   curl -X DELETE "https://localhost:9200/ticker_history" -H 'Content-Type: application/json' -ku admin:$OPENSEARCH_INITIAL_ADMIN_PASSWORD
+   ```
+* [Delete the documents](https://docs.opensearch.org/latest/api-reference/document-apis/delete-by-query/) in the index if needed
+   ```bash
+   curl -X POST "https://localhost:9200/ticker_history/_delete_by_query" -H 'Content-Type: application/json' -d '{"query":{"match_all":{}}}' -ku admin:$OPENSEARCH_INITIAL_ADMIN_PASSWORD
+   ```
+
+### PySpark
+
+The instructions below use a utility script to save the necessary ticker data into the [temp/](/temp) folder and Apache Spark 4.1.2, specifically PySpark to upsert the data into OpenSearch index, `ticker_history`.
+1. After setting up [Python virtual environment](#python-virtual-environment), run [src/yfinance_extract.py](/src/yfinance_extract.py) which is based on this [script](https://github.com/marsierz-ui/SPCX_data/blob/claude/dreamy-archimedes-2igl9i/collect.py) and uses the [yfinance](https://ranaroussi.github.io/yfinance/) library to download ticker data
+   ```bash
+    ticker_symbols=( 'AAPL' 'NVDA' 'GOOG' 'MSFT' 'AMZN' 'AVGO' 'META' 'SPCX' 'TSLA' 'WMT' 'SKHY' 'MU' 'AMD' 'ASML' 'CSCO' 'COST' 'INTC' 'AMAT' 'LRCX' 'NFLX' 'PLTR' 'PANW' 'TXN' 'ARM' 'LIN' 'KLAC' 'AMGN' 'PEP' 'TMUS' 'CRWD' 'ADI' 'STX' 'SHOP' 'GILD' 'QCOM' 'WDC' 'BKNG' 'SNDK' 'IBKR' 'MRVL' 'APP' 'PDD' 'ISRG' 'VRTX' 'SBUX' 'FTNT' 'ADP' 'SNY' 'ADBE' 'MAR' 'EQIX' 'CME' 'MNST' 'MELI' 'DDOG' 'CSX' 'CEG' 'CDNS' 'INTU' 'ABNB' 'CMCSA' 'CTAS' 'DASH' 'MDLZ' 'NTES' 'HOOD' 'ROST' 'HON' 'ORLY' 'REGN' 'SNPS' 'PCAR' 'AEP' )
+    
+    for symbol in "${ticker_symbols[@]}"; do
+        echo "Extracting data for $symbol..."
+        python src/yfinance_extract.py -t "$symbol"
+    done
+   ```
+2. Run the PySpark job through the [spark](https://hub.docker.com/_/spark) image to read the extracts and write to OpenSearch via [src/opensearch_load.py](/src/opensearch_load.py)
    ```bash
    docker run -it --rm --name spark \
       -v $(pwd):/opt/spark/work-dir \
@@ -87,20 +110,17 @@ The instructions below are for setting up a Docker Compose cluster defined by [c
       Exception in thread "main" java.io.FileNotFoundException: /nonexistent/.ivy2.5.2/cache/resolved-org.apache.spark-spark-submit-parent-a95084db-7e12-40b2-b7f1-1e9394f2a70d-1.0.xml (No such file or directory)
       ```
 
-The following command uses the [amazon/aws-glue-libs](https://hub.docker.com/r/amazon/aws-glue-libs) image which can install Python modules. The Docker image doesn't support the `--additional-python-modules` argument so `python3 -m pip install` is used instead.
-```bash
-docker run -it --rm --name glue5_spark_submit \
-    -v $(pwd):/opt/hadoop/workspace \
-    -e OPENSEARCH_INITIAL_ADMIN_PASSWORD=$OPENSEARCH_INITIAL_ADMIN_PASSWORD \
-    amazon/aws-glue-libs:5.0.9 \
-    -c "python3 -m pip install \"yfinance==1.5.2\" && spark-submit --packages org.opensearch.client:opensearch-spark-35_2.12:2.0.0 /opt/hadoop/workspace/src/yfinance_to_opensearch.py"
-```
+#### Apache Spark Python Packaging Options
 
-## Spark Packaging Options
+It is possible to combine the two steps and incorporate `yfinance` into the PySpark job, but further research and development is needed on the [Python Package Management](https://spark.apache.org/docs/latest/api/python/tutorial/python_packaging.html) documentation to pull it off. The options that are mentioned in the documentation are summarized below as follows:
+* [Using PySpark Native Features](https://spark.apache.org/docs/latest/api/python/tutorial/python_packaging.html#using-pyspark-native-features) – This approach was attempted with instructions further below
+* [Using Conda](https://spark.apache.org/docs/latest/api/python/tutorial/python_packaging.html#using-conda) – Use a [Conda](https://docs.conda.io/en/latest/) environment to ship the packages via [conda-pack](https://conda.github.io/conda-pack/spark.html) to create relocatable Conda environments which are loaded through either `--archives` option or `spark.archives` configuration
+* [Using Virtualenv](https://spark.apache.org/docs/latest/api/python/tutorial/python_packaging.html#using-virtualenv) – Use a [virtualenv](https://virtualenv.pypa.io/en/latest/) environment (i.e., [venv](https://docs.python.org/3/library/venv.html) module) to ship the packages via [venv-pack](https://jcristharif.com/venv-pack/index.html) to create Virtualenv environments which are loaded through either `--archives` option or `spark.archives` configuration
+* [Using PEX](https://spark.apache.org/docs/latest/api/python/tutorial/python_packaging.html#using-pex) – Use [PEX](https://github.com/pantsbuild/pex) to ship `.pex` executable file with a self-contained Python environment similar to Conda or virtualenv which is loaded through either `--files` option or `spark.files` configuration
+* [Using uv run](https://spark.apache.org/docs/latest/api/python/tutorial/python_packaging.html#using-uv-run) – Create a wrapper script that executes `uv run` that is referenced by `PYSPARK_PYTHON` environment variable and [PEP 723 inline script metadata](https://docs.astral.sh/uv/guides/scripts/#declaring-script-dependencies) to declare the dependencies
+  * **Note:** This approach appears to be the most promising as it doesn't require packaging offline and could possibly run on startup of the Docker container
 
-There was an attempt to incorporate `yfinance` into the PySpark job, but I couldn't work out the steps needed to package the libraries as per [Python Package Management](https://spark.apache.org/docs/latest/api/python/tutorial/python_packaging.html).
-
-The instructions below are an attempt to use the [PySpark native features](https://spark.apache.org/docs/latest/api/python/tutorial/python_packaging.html#using-pyspark-native-features) that was attempted is as follows:
+An attempt to use the [PySpark native features](https://spark.apache.org/docs/latest/api/python/tutorial/python_packaging.html#using-pyspark-native-features) was made as follows, but ultimately failed due to `pip install` and Python wheels not being supported to pass the necessary libraries to the Spark worker:
 1. Download the [wheels](https://packaging.python.org/en/latest/specifications/binary-distribution-format/) associated with `yfinance` that would be compatible with PySpark
    ```bash
    pip download yfinance==1.5.2 \
@@ -137,7 +157,21 @@ Some debugging techniques that could be useful for future attempts are
    ```
 * Add `--conf spark.log.level=DEBUG` as `spark-submit` argument to propagate the [configuration parameter](https://spark.apache.org/docs/latest/configuration.html) to the PySpark application
 
-The AWS Glue equivalent of what we're trying is documented in [Using Python libraries with AWS Glue](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-programming-python-libraries.html) with the following options
+### AWS Glue
+
+The instructions below combine the two separate steps from [PySpark](#pyspark) with the [amazon/aws-glue-libs](https://hub.docker.com/r/amazon/aws-glue-libs) image which can install Python modules. AWS Glue 5.0 [supports](https://docs.aws.amazon.com/glue/latest/dg/release-notes.html) Apache Spark 3.5.4, Python 3.11, Scala 2.12.8, and Java 17.
+1. Run the AWS Glue job through the `amazon/aws-glue-libs` image to read ticker data from Yahoo! Finance and write to OpenSearch via [src/yfinance_to_opensearch.py](/src/yfinance_to_opensearch.py). The Docker image doesn't support the `--additional-python-modules` argument available to the actual AWS Glue service, so `python3 -m pip install` is used instead.
+   ```bash
+   docker run -it --rm --name glue5_spark_submit \
+       -v $(pwd):/opt/hadoop/workspace \
+       -e OPENSEARCH_INITIAL_ADMIN_PASSWORD=$OPENSEARCH_INITIAL_ADMIN_PASSWORD \
+       amazon/aws-glue-libs:5.0.9 \
+       -c "python3 -m pip install \"yfinance==1.5.2\" && spark-submit --packages org.opensearch.client:opensearch-spark-35_2.12:2.0.0 /opt/hadoop/workspace/src/yfinance_to_opensearch.py"
+   ```
+
+#### AWS Glue Python Packaging Options
+
+The AWS Glue equivalent of what we're trying to do with [Apache Spark](#apache-spark-python-packaging-options) is documented in [Using Python libraries with AWS Glue](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-programming-python-libraries.html) with the following options
 * "Installing additional Python libraries in AWS Glue 5.0 or above using Zip of Wheels"
   > --additional-python-modules s3://amzn-s3-demo-bucket/path/to/zip-of-wheels-1.0.0.gluewheels.zip --python-modules-installer-option --no-index
   * See [Appendix A: Creating a Zip of Wheels Artifact](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-programming-python-libraries.html#glue-python-library-zip-of-wheels-appendix) for how to assemble a zip of wheel artifact
