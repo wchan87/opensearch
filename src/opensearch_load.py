@@ -1,6 +1,7 @@
 import os
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import concat, lit
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType, TimestampType
 import re
 from typing import Optional
 
@@ -12,6 +13,14 @@ def extract_ticker_symbol(file_name: str) -> Optional[str]:
 def main():
     spark_session: SparkSession = SparkSession.builder.appName("OpenSearchIngestion").getOrCreate()
     password: str = os.environ["OPENSEARCH_INITIAL_ADMIN_PASSWORD"]
+    schema: StructType = StructType([
+        StructField("timestamp", TimestampType(), False),
+        StructField("open", DoubleType(), False),
+        StructField("high", DoubleType(), False),
+        StructField("low", DoubleType(), False),
+        StructField("close", DoubleType(), False),
+        StructField("volume", IntegerType(), False)
+    ])
     directory_path: str = "/opt/spark/work-dir/temp"
     for file_name in os.listdir(directory_path):
         ticker_symbol = extract_ticker_symbol(file_name)
@@ -19,9 +28,9 @@ def main():
             file_path = os.path.join(directory_path, file_name)
             print(f"Processing: {file_path}")
             df: DataFrame = spark_session.read.option("header", True).csv(file_path)
-            df = df.withColumn("symbol", lit(ticker_symbol))
+            df = df.withColumn("symbol", lit(ticker_symbol).cast(StringType()))
             # lit("-") is needed, otherwise it will try to find a column with that name
-            df = df.withColumn("id", concat(df["symbol"], lit("-"), df["timestamp"]))
+            df = df.withColumn("id", concat(df["symbol"], lit("-"), df["timestamp"].cast(StringType())))
             df.write.format("opensearch") \
                 .option("opensearch.nodes", "host.docker.internal") \
                 .option("opensearch.net.ssl", "true") \

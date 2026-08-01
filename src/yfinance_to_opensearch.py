@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import concat, lit
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType, TimestampType
 import yfinance as yf
 
 def get_data(ticker_symbol: str) -> pd.DataFrame:
@@ -17,13 +18,22 @@ def get_data(ticker_symbol: str) -> pd.DataFrame:
 def main():
     spark_session: SparkSession = SparkSession.builder.appName("OpenSearchIngestion").getOrCreate()
     password: str = os.environ["OPENSEARCH_INITIAL_ADMIN_PASSWORD"]
+    schema: StructType = StructType([
+        StructField("timestamp", TimestampType(), False),
+        StructField("open", DoubleType(), False),
+        StructField("high", DoubleType(), False),
+        StructField("low", DoubleType(), False),
+        StructField("close", DoubleType(), False),
+        StructField("volume", IntegerType(), False)
+    ])
     ticker_symbols: set[str] = { 'AAPL', 'NVDA', 'GOOG', 'MSFT', 'AMZN', 'AVGO', 'META', 'SPCX', 'TSLA', 'WMT', 'SKHY', 'MU', 'AMD', 'ASML', 'CSCO', 'COST', 'INTC', 'AMAT', 'LRCX', 'NFLX', 'PLTR', 'PANW', 'TXN', 'ARM', 'LIN', 'KLAC', 'AMGN', 'PEP', 'TMUS', 'CRWD', 'ADI', 'STX', 'SHOP', 'GILD', 'QCOM', 'WDC', 'BKNG', 'SNDK', 'IBKR', 'MRVL', 'APP', 'PDD', 'ISRG', 'VRTX', 'SBUX', 'FTNT', 'ADP', 'SNY', 'ADBE', 'MAR', 'EQIX', 'CME', 'MNST', 'MELI', 'DDOG', 'CSX', 'CEG', 'CDNS', 'INTU', 'ABNB', 'CMCSA', 'CTAS', 'DASH', 'MDLZ', 'NTES', 'HOOD', 'ROST', 'HON', 'ORLY', 'REGN', 'SNPS', 'PCAR', 'AEP' }
     for ticker_symbol in ticker_symbols:
         bars: pd.DataFrame = get_data(ticker_symbol)
-        df: DataFrame = spark_session.createDataFrame(bars)
-        df = df.withColumn("symbol", lit(ticker_symbol))
+        df: DataFrame = spark_session.createDataFrame(data=bars, schema=schema)
+        df = df.withColumn("symbol", lit(ticker_symbol).cast(StringType()))
         # lit("-") is needed, otherwise it will try to find a column with that name
-        df = df.withColumn("id", concat(df["symbol"], lit("-"), df["timestamp"]))
+        # Explicitly casting timestamp to string for the ID concatenation
+        df = df.withColumn("id", concat(df["symbol"], lit("-"), df["timestamp"].cast(StringType())))
         df.write.format("opensearch") \
             .option("opensearch.nodes", "host.docker.internal") \
             .option("opensearch.net.ssl", "true") \

@@ -2,6 +2,7 @@
 
 * [Local Setup](#local-setup) – Prerequisites for local development
 * [Ingestion into OpenSearch](#ingestion-into-opensearch) – Data ingestion into OpenSearch
+* [OpenSearch Dashboards](#opensearch-dashboards) – Visualizations and data dashboards via OpenSearch Dashboards 
 
 ## Local Setup
 
@@ -184,3 +185,45 @@ The AWS Glue equivalent of what we're trying to do with [Apache Spark](#apache-s
 * "Including Python files with PySpark native features"
   > AWS Glue uses PySpark to include Python files in AWS Glue ETL jobs. You will want to use `--additional-python-modules` to manage your dependencies when available. You can use the `--extra-py-files` job parameter to include Python files. Dependencies must be hosted in Amazon S3 and the argument value should be a comma delimited list of Amazon S3 paths with no spaces. This functionality behaves like the Python dependency management you would use with Spark. For more information on Python dependency management in Spark, see Using [PySpark Native Features](https://spark.apache.org/docs/latest/api/python/tutorial/python_packaging.html#using-pyspark-native-features) page in Apache Spark documentation. `--extra-py-files` is useful in cases where your additional code is not packaged, or when you are migrating a Spark program with an existing toolchain for managing dependencies. For your dependency tooling to be maintainable, you will have to bundle your dependencies before submitting.
    * In short, `--extra-py-files` for AWS Glue corresponds to `--py-files` with vanilla Apache Spark
+
+## OpenSearch Dashboards
+
+[OpenSearch Dashboards](https://docs.opensearch.org/latest/dashboards/) "is the web UI for OpenSearch. You can use OpenSearch Dashboards to perform most tasks you can do with the OpenSearch APIs. You can also create visualizations and data dashboards with OpenSearch Dashboards."
+
+* [OpenSearch > Docs > Creating dashboards](https://docs.opensearch.org/latest/dashboards/dashboard/index/)
+  * Click the "Create" button and select the "Dashboard" on dropdown
+    * Local URL: http://localhost:5601/app/dashboards#/create
+* [OpenSearch > Docs > Observability](https://docs.opensearch.org/latest/observing-your-data/)
+  * Click the "Create" button and select the "Observability Dashboard" on the dropdown
+    * Local URL: http://localhost:5601/app/observability-dashboards#/create
+* [OpenSearch Observability Stack](https://observability.opensearch.org/) – Stack built on top of OpenSearch, [Prometheus](https://prometheus.io/docs/introduction/overview/), and [OTLP](https://opentelemetry.io/docs/specs/otlp/) endpoint associated with [OpenSearch > Docs > OpenSearch Data Prepper](https://docs.opensearch.org/latest/data-prepper/)
+  * [OpenSearch Observability Stack > Docs](https://observability.opensearch.org/docs/)
+
+### OpenSearch Dashboards – Visualizations
+
+[OpenSearch > Docs > Building data visualizations](https://docs.opensearch.org/latest/dashboards/visualize/index/) "provides two approaches for creating data visualizations: building visualizations visually and building visualizations using queries. Both produce charts that you can save and add to dashboards."
+
+OpenSearch Dashboards has the following [visualization types](https://docs.opensearch.org/latest/dashboards/visualize/visualize-app/viz-types/):
+
+| Visualization Category | Visualization Type | Description |
+| -- | -- | -- |
+| Text | [Metric visualizations]() | "Displays a single numeric value prominently. Use for KPIs and summary statistics." |
+| Text | [Tag clouds](https://docs.opensearch.org/latest/dashboards/visualize/tag-cloud/) | "Displays words sized by frequency or another metric." |
+| Text | [Data tables](https://docs.opensearch.org/latest/dashboards/visualize/data-table/) | "Displays raw or aggregated data in tabular form." |
+| One-dimensional | [Gauge visualizations](https://docs.opensearch.org/latest/dashboards/visualize/gauge/) | "Displays a single value on a dial relative to defined ranges or thresholds." |
+| One-dimensional | [Goal visualizations](https://docs.opensearch.org/latest/dashboards/visualize/goal/) | "Displays a single value on a progress bar relative to a target." |
+| One-dimensional | [Pie charts](https://docs.opensearch.org/latest/dashboards/visualize/pie-charts/) | "Displays proportional data as slices of a circle. Use for part-to-whole comparisons." |
+| Multidimensional | [Bar charts](https://docs.opensearch.org/latest/dashboards/visualize/bar-charts/) | "Compare categorical data as vertical or horizontal bars. Use for ranking or comparing values across categories." |
+| Multidimensional | [Area charts](https://docs.opensearch.org/latest/dashboards/visualize/area/) | "Displays data as a filled region between a line and the axis. Use for showing volume over time or comparing stacked categories." |
+| Multidimensional | [Heat maps](https://docs.opensearch.org/latest/dashboards/visualize/heat-map/) | "Uses color intensity to represent values across two categorical dimensions." |
+| Multidimensional | [Line charts](https://docs.opensearch.org/latest/dashboards/visualize/line-charts/) | "Plots data points connected by lines. Use for visualizing trends and changes over time." |
+| Map | [Coordinate maps](https://docs.opensearch.org/latest/dashboards/visualize/coordinate-maps/) | "Plots geographic data points on a map using latitude and longitude coordinates." |
+| Map | [Region maps](https://docs.opensearch.org/latest/dashboards/visualize/region-maps/) | "Colors geographic regions by aggregated value. Supports custom GeoJSON vector maps." |
+| Map | [Maps application](https://docs.opensearch.org/latest/dashboards/visualize/maps/) | "A standalone mapping tool with multiple layer types, tooltips, filters, and labels." |
+| Utility | [Markdown visualizations](https://docs.opensearch.org/latest/dashboards/visualize/markdown/) | "Renders Markdown text alongside data visualizations for context and instructions." |
+| Utility | [Controls](https://docs.opensearch.org/latest/dashboards/visualize/controls/) | "Adds interactive filter panels (dropdown lists or range sliders) to a dashboard." |
+| Other | [PPL visualizations](https://docs.opensearch.org/latest/dashboards/visualize/ppl/) | "Creates visualizations by entering PPL queries directly." |
+| Other | [TSVB visualizations](https://docs.opensearch.org/latest/dashboards/visualize/tsvb/) | "Creates detailed time-series visualizations with support for Area, Line, Metric, Gauge, Markdown, and Data Table types." |
+| Other | [Vega visualizations](https://docs.opensearch.org/latest/dashboards/visualize/vega/) | "Uses the Vega and Vega-Lite declarative grammars for custom visualizations." |
+| Other | [VisBuilder](https://docs.opensearch.org/latest/dashboards/visualize/timeline/) | "A drag-and-drop tool for creating visualizations without selecting a chart type in advance." |
+| Other | [Timeline visualizations](https://docs.opensearch.org/latest/dashboards/visualize/timeline/) | "Uses a text-based expression syntax to create time-series visualizations." |
