@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 from pyspark.sql import DataFrame, SparkSession
-from pyspark.sql.functions import concat, lit
+from pyspark.sql.functions import concat, lit, date_format
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType, TimestampType
 import yfinance as yf
 
@@ -31,9 +31,10 @@ def main():
         bars: pd.DataFrame = get_data(ticker_symbol)
         df: DataFrame = spark_session.createDataFrame(data=bars, schema=schema)
         df = df.withColumn("symbol", lit(ticker_symbol).cast(StringType()))
+        # Convert timestamp to strict_date_time_no_millis format string
+        df = df.withColumn("timestamp", date_format("timestamp", "yyyy-MM-dd'T'HH:mm:ssXXX"))
         # lit("-") is needed, otherwise it will try to find a column with that name
-        # Explicitly casting timestamp to string for the ID concatenation
-        df = df.withColumn("id", concat(df["symbol"], lit("-"), df["timestamp"].cast(StringType())))
+        df = df.withColumn("id", concat(df["symbol"], lit("-"), df["timestamp"]))
         df.write.format("opensearch") \
             .option("opensearch.nodes", "host.docker.internal") \
             .option("opensearch.net.ssl", "true") \

@@ -73,10 +73,12 @@ There are two variants for loading OpenSearch that do the same thing to leverage
   * [AWS Glue Python Packaging Options](#aws-glue-python-packaging-options)
 
 The instructions below are to create/maintain the `ticker_history` index that will be used to hold the data to be loaded
-* [Create the index](https://docs.opensearch.org/latest/api-reference/index-apis/create-index/), `settings.index.number_of_replicas` needs to be explicitly set to `0` or the index health will be `Yellow` so it will never be accessible
+* [Create the index](https://docs.opensearch.org/latest/api-reference/index-apis/create-index/)
    ```bash
-   curl -X PUT "https://localhost:9200/ticker_history" -H 'Content-Type: application/json' -d '{"settings":{"index":{"number_of_shards":1,"number_of_replicas":0}}}' -ku admin:$OPENSEARCH_INITIAL_ADMIN_PASSWORD
+   curl -X PUT "https://localhost:9200/ticker_history" -H 'Content-Type: application/json' -d '{"settings":{"index":{"number_of_shards":1,"number_of_replicas":0}},"mappings":{"properties":{"timestamp":{"type":"date","format":"strict_date_time_no_millis"},"symbol":{"type":"keyword"},"id":{"type":"keyword"},"open":{"type":"double"},"high":{"type":"double"},"low":{"type":"double"},"close":{"type":"double"},"volume":{"type":"integer"}}}}' -ku admin:$OPENSEARCH_INITIAL_ADMIN_PASSWORD
    ```
+   * `settings.index.number_of_replicas` needs to be explicitly set to `0` or the index health will be `Yellow` so it will never be accessible
+   * `mappings.properties.timestamp` needs to be set for the timestamp to be stored correctly
 * [Delete the index](https://docs.opensearch.org/latest/api-reference/index-apis/delete-index/) if necessary
    ```bash
    curl -X DELETE "https://localhost:9200/ticker_history" -H 'Content-Type: application/json' -ku admin:$OPENSEARCH_INITIAL_ADMIN_PASSWORD
